@@ -1,0 +1,26 @@
+{
+	"geode": "5.6.1",
+	"gd": {
+		"win": "2.2081",
+		"android": "2.2081",
+		"mac": "2.2081",
+		"ios": "2.2081"
+	},
+	"id": "axiom.100-days",
+	"name": "100 Days",
+	"version": "v1.0.11",
+	"developer": "Axiom",
+	"description": "Beat one demon level once per day for 100 calendar days.",
+	"tags": ["gameplay", "joke"],
+	"links": {
+		"community": "https://discord.gg/TWn99qzmUA"
+	},
+	"resources": {
+		"sprites": [
+			"logo.png"
+		]
+	},
+	"dependencies": {
+		"geode.node-ids": ">=v1.23.3"
+	}
+}
