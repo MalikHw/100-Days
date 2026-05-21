@@ -2,17 +2,17 @@
 #include <Geode/modify/MenuLayer.hpp>
 #include <Geode/modify/PlayLayer.hpp>
 #include <Geode/utils/web.hpp>
+#include <Geode/utils/async.hpp>
 #include <Geode/binding/GJGameLevel.hpp>
 #include <Geode/binding/GameLevelManager.hpp>
 #include <Geode/binding/GJSearchObject.hpp>
 #include <Geode/binding/LevelInfoLayer.hpp>
 #include <Geode/binding/ButtonSprite.hpp>
 #include <Geode/ui/Popup.hpp>
+#include <Geode/utils/general.hpp>
 #include <matjson.hpp>
 #include <fmt/format.h>
 #include <ctime>
-#include <thread>
-#include <atomic>
 
 using namespace geode::prelude;
 
@@ -20,13 +20,8 @@ using namespace geode::prelude;
 static char const* LVL_URL = "https://raw.githubusercontent.com/axiom-S25u/100dLvlID/main/level";
 
 static std::string todayStr() {
-    time_t t = time(nullptr);
-    tm info{};
-#ifdef _WIN32
-    localtime_s(&info, &t);
-#else
-    localtime_r(&t, &info);
-#endif
+    std::time_t t = std::time(nullptr);
+    std::tm info = geode::localtime(t);
     char buf[16];
     strftime(buf, sizeof(buf), "%Y-%m-%d", &info);
     return std::string(buf);
@@ -93,6 +88,7 @@ protected:
 
     bool init(float w, float h) {
         if (!Popup::init(w, h)) return false;
+        this->setID("100days-popup");
         this->setTitle("100 Day Streak");
 
         int days = howMany();
@@ -158,7 +154,7 @@ protected:
             starSpr->setPosition({380.f, 175.f});
             m_mainLayer->addChild(starSpr);
         }
-        CCLabelBMFont* starLbl = CCLabelBMFont::create(std::to_string(stars).c_str(), "bigFont.fnt");
+        CCLabelBMFont* starLbl = CCLabelBMFont::create(fmt::format("{}", stars).c_str(), "bigFont.fnt");
         starLbl->setScale(0.5f);
         starLbl->setAnchorPoint({1.f, 0.5f});
         starLbl->setPosition(368.f, 175.f);
@@ -206,7 +202,7 @@ protected:
     void onPlay(CCObject*) {
         if (!m_lvl) return;
         CCScene* sc = LevelInfoLayer::scene(m_lvl.data(), false);
-        CCDirector::sharedDirector()->pushScene(CCTransitionFade::create(0.5f, sc));
+        CCDirector::sharedDirector()->replaceScene(CCTransitionFade::create(0.5f, sc));
     }
 
     void onCheck(CCObject*);
@@ -240,27 +236,56 @@ public:
 
 class LvlGrabber : public CCNode, public LevelManagerDelegate {
 public:
-    LevelManagerDelegate* m_prevDelegate = nullptr;
-
     void killDelegate() {
         GameLevelManager* glm = GameLevelManager::sharedState();
-        if (glm && glm->m_levelManagerDelegate == this) glm->m_levelManagerDelegate = m_prevDelegate;
-        m_prevDelegate = nullptr;
+        if (glm && glm->m_levelManagerDelegate == this) glm->m_levelManagerDelegate = nullptr;
+    }
+
+    void teardown() {
+        killDelegate();
+        this->removeFromParentAndCleanup(true);
+    }
+
+    static void killExisting() {
+        CCScene* scene = CCDirector::sharedDirector()->getRunningScene();
+        if (!scene) return;
+        CCNode* old = scene->getChildByID("100days-grabber");
+        if (old) {
+            LvlGrabber* g = typeinfo_cast<LvlGrabber*>(old);
+            if (g) g->teardown();
+        }
+    }
+
+    static void closeOldPopup() {
+        CCScene* scene = CCDirector::sharedDirector()->getRunningScene();
+        if (!scene) return;
+        CCNode* old = scene->getChildByID("100days-popup");
+        if (old) old->removeFromParentAndCleanup(true);
     }
 
     static void openPopupFor(int64_t idVal) {
-        LvlGrabber* val = new LvlGrabber();
-        val->autorelease();
-        val->retain();
-        GJSearchObject* srch = GJSearchObject::create(SearchType::Search, std::to_string(idVal));
+        killExisting();
+
         GameLevelManager* glm = GameLevelManager::sharedState();
         if (!glm) {
             FLAlertLayer::create("100 Days", "level fetch failll", "OK")->show();
-            val->release();
             return;
         }
-        val->m_prevDelegate = glm->m_levelManagerDelegate;
+
+        LvlGrabber* val = new LvlGrabber();
+        val->autorelease();
+        val->setID("100days-grabber");
+
+        CCScene* scene = CCDirector::sharedDirector()->getRunningScene();
+        if (!scene) {
+            FLAlertLayer::create("100 Days", "no scene??", "OK")->show();
+            return;
+        }
+        scene->addChild(val);
+
         glm->m_levelManagerDelegate = val;
+
+        GJSearchObject* srch = GJSearchObject::create(SearchType::Search, fmt::format("{}", idVal));
         glm->getOnlineLevels(srch);
     }
 
@@ -269,82 +294,70 @@ public:
     }
     void loadLevelsFinished(CCArray* lvls, char const*, int) override {
         killDelegate();
+        closeOldPopup();
         if (!lvls || lvls->count() == 0) {
             FLAlertLayer::create("100 Days", "level not found, mb", "OK")->show();
-            release();
+            this->removeFromParentAndCleanup(true);
             return;
         }
         GJGameLevel* lvl = typeinfo_cast<GJGameLevel*>(lvls->objectAtIndex(0));
         if (lvl) {
-            CCScene* scene = CCDirector::sharedDirector()->getRunningScene();
-            if (scene && scene->getChildren()) {
-                for (CCNode* c : CCArrayExt<CCNode*>(scene->getChildren())) {
-                    MyPopup* old = typeinfo_cast<MyPopup*>(c);
-                    if (old) old->removeFromParentAndCleanup(true);
-                }
-            }
             MyPopup* pop = MyPopup::create(lvl);
             if (pop) pop->show();
         }
-        release();
+        this->removeFromParentAndCleanup(true);
     }
     void loadLevelsFailed(char const* key) override { loadLevelsFailed(key, 0); }
     void loadLevelsFailed(char const*, int) override {
         killDelegate();
         FLAlertLayer::create("100 Days", "level fetch faillll", "OK")->show();
-        release();
+        this->removeFromParentAndCleanup(true);
     }
     void setupPageInfo(gd::string, char const*) override {}
 };
 
-static std::atomic<bool> g_busy{false};
+static async::TaskHolder<web::WebResponse> s_webHolder;
 
 static void doGrab() {
-    if (g_busy.exchange(true)) return;
-    std::thread([] {
-        web::WebRequest req;
-        req.timeout(std::chrono::seconds(15));
-        web::WebResponse res = req.getSync(LVL_URL);
-        int64_t parsed = 0;
-        bool ok = false;
-        if (res.ok()) {
-            Result<std::string> sr = res.string();
-            if (sr) {
-                std::string raw = sr.unwrap();
-                Result<int64_t> num = numFromString<int64_t>(raw);
-                if (num) {
-                    int64_t v = num.unwrap();
-                    if (v > 0) {
-                        parsed = v;
-                        ok = true;
-                    }
-                }
-            }
-        } else {
-            log::warn("fetch dead http {}", res.code());
-        }
-        Loader::get()->queueInMainThread([ok, parsed] {
-            g_busy = false;
-            if (!ok) {
+    LvlGrabber::killExisting();
+    web::WebRequest req;
+    req.timeout(std::chrono::seconds(15));
+    s_webHolder.spawn(
+        req.get(LVL_URL),
+        [](web::WebResponse res) {
+            if (!res.ok()) {
+                log::warn("fetch dead http {}", res.code());
                 FLAlertLayer::create("100 Days", "fetch fail", "OK")->show();
                 return;
+            }
+            Result<std::string> sr = res.string();
+            if (!sr) {
+                FLAlertLayer::create("100 Days", "fetch fail", "OK")->show();
+                return;
+            }
+            std::string raw = sr.unwrap();
+            while (!raw.empty() && (raw.back() == '\n' || raw.back() == '\r' || raw.back() == ' ')) raw.pop_back();
+            Result<int64_t> num = numFromString<int64_t>(raw);
+            if (!num) {
+                FLAlertLayer::create("100 Days", "fetch fail", "OK")->show();
+                return;
+            }
+            int64_t parsed = num.unwrap();
+            if (parsed <= 0) {
+                FLAlertLayer::create("100 Days", "level not loaded", "OK")->show();
+                return; // fih
             }
             int64_t prev = Mod::get()->getSavedValue<int64_t>("level-id", 0);
             if (prev != parsed) {
                 Mod::get()->setSavedValue<int64_t>("level-id", parsed);
                 log::info("id changed {} -> {}", prev, parsed);
             }
-            if (parsed <= 0) {
-                FLAlertLayer::create("100 Days", "level not loaded", "OK")->show();
-                return;
-            }
             LvlGrabber::openPopupFor(parsed);
-        });
-    }).detach();
+        }
+    );
 }
 
 void MyPopup::onCheck(CCObject*) {
-    this->removeFromParentAndCleanup(true);
     doGrab();
 }
 
@@ -362,7 +375,7 @@ class $modify(MyMenu, MenuLayer) {
             this,
             menu_selector(MyMenu::onBtn)
         );
-        btn->setID("100days-button"_spr);
+        btn->setID("100days-button");
 
         CCLabelBMFont* lbl = CCLabelBMFont::create(fmt::format("{}/100", days).c_str(), "bigFont.fnt");
         lbl->setScale(0.4f);
