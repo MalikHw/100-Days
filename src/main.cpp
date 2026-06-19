@@ -82,14 +82,14 @@ static void boom(CCNode* parent) {
     FLAlertLayer::create("100 Days", "yo. 100 days done. ur built different", "OK")->show(); // respect sigma mode tuff
 } // i bet if i see a tiktok, 3 days in i will see some dude with this lmao
 
-class MyPopup : public Popup<GJGameLevel*> {
+class MyPopup : public Popup {
 protected:
     Ref<GJGameLevel> m_lvl = nullptr;
 
-    bool setup(GJGameLevel* lvl) override {
+    bool init(float w, float h) {
+        if (!Popup::init(w, h)) return false;
         this->setID("100days-popup");
         this->setTitle("100 Day Streak");
-        m_lvl = lvl;
 
         int days = howMany();
         if (days > 100) days = 100;
@@ -224,7 +224,8 @@ protected:
 public:
     static MyPopup* create(GJGameLevel* lvl) {
         MyPopup* ret = new MyPopup();
-        if (ret->initAnchored(400.f, 240.f, lvl)) {
+        ret->m_lvl = lvl;
+        if (ret->init(400.f, 240.f)) {
             ret->autorelease();
             return ret;
         }
