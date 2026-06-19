@@ -370,8 +370,22 @@ class $modify(MyMenu, MenuLayer) {
 
         CCSprite* spr = CCSprite::create("logo.png"_spr);
         if (!spr) return true;
-        CCMenuItemSpriteExtra* btn = CCMenuItemSpriteExtra::create(
+        
+        CircleButtonSprite* btns = CircleButtonSprite::create(
             spr,
+            CircleBaseColor::Green,
+            CircleBaseSize::MediumAlt
+        );
+        if (!btns) return true;
+        
+        // scale ig
+        auto size = btns->getContentSize();
+        auto sprSize = spr->getContentSize();
+        float scale = size.width / std::max(sprSize.width, sprSize.height);
+        spr->setScale(scale * 0.67f);
+        
+        CCMenuItemSpriteExtra* btn = CCMenuItemSpriteExtra::create(
+            btns,
             this,
             menu_selector(MyMenu::onBtn)
         );
