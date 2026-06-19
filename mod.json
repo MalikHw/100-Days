@@ -8,8 +8,8 @@
 	},
 	"id": "axiom.100-days",
 	"name": "100 Days",
-	"version": "v1.0.14",
-	"developer": "Axiom",
+	"version": "v1.0.15",
+	"developers": ["Axiom", "MalikHw47"],
 	"description": "Beat one demon level once per day for 100 calendar days.",
 	"tags": ["gameplay", "joke"],
 	"links": {

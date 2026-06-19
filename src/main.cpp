@@ -38,7 +38,7 @@ static matjson::Value gimmeDays() {
 }
 
 static int howMany() {
-    return (int)gimmeDays().size();
+    return static_cast<int>(gimmeDays().size());
 }
 
 static bool gotToday(matjson::Value const& arr) {
@@ -82,14 +82,14 @@ static void boom(CCNode* parent) {
     FLAlertLayer::create("100 Days", "yo. 100 days done. ur built different", "OK")->show(); // respect sigma mode tuff
 } // i bet if i see a tiktok, 3 days in i will see some dude with this lmao
 
-class MyPopup : public Popup {
+class MyPopup : public Popup<GJGameLevel*> {
 protected:
     Ref<GJGameLevel> m_lvl = nullptr;
 
-    bool init(float w, float h) {
-        if (!Popup::init(w, h)) return false;
+    bool setup(GJGameLevel* lvl) override {
         this->setID("100days-popup");
         this->setTitle("100 Day Streak");
+        m_lvl = lvl;
 
         int days = howMany();
         if (days > 100) days = 100;
@@ -109,7 +109,7 @@ protected:
         lbl3->setPosition(85.f, 85.f);
         m_mainLayer->addChild(lbl3);
 
-        float ratio = (float)days / 100.f;
+        float ratio = static_cast<float>(days) / 100.f;
 
         CCLayerColor* bg = CCLayerColor::create({0, 0, 0, 180}, 140.f, 12.f);
         bg->ignoreAnchorPointForPosition(false);
@@ -134,7 +134,7 @@ protected:
         std::string desc = "(no description)";
         if (m_lvl) {
             nm = std::string(m_lvl->m_levelName.c_str());
-            stars = (int)m_lvl->m_stars;
+            stars = static_cast<int>(m_lvl->m_stars);
             gd::string raw = m_lvl->m_levelDesc;
             if (!raw.empty()) {
                 gd::string dec = cocos2d::ZipUtils::base64URLDecode(raw);
@@ -224,12 +224,11 @@ protected:
 public:
     static MyPopup* create(GJGameLevel* lvl) {
         MyPopup* ret = new MyPopup();
-        ret->m_lvl = lvl;
-        if (ret->init(400.f, 240.f)) {
+        if (ret->initAnchored(400.f, 240.f, lvl)) {
             ret->autorelease();
             return ret;
         }
-        delete ret;
+        CC_SAFE_DELETE(ret);
         return nullptr;
     }
 };
@@ -406,7 +405,7 @@ class $modify(MyPlay, PlayLayer) {
     bool init(GJGameLevel* lvl, bool useReplay, bool dontCreateObjects) {
         if (!PlayLayer::init(lvl, useReplay, dontCreateObjects)) return false;
         int64_t tgt = gimmeLvlId();
-        if (tgt != 0 && lvl && (int64_t)lvl->m_levelID == tgt) {
+        if (tgt != 0 && lvl && static_cast<int64_t>(lvl->m_levelID) == tgt) {
             m_fields->m_isTarget = true;
         }
         return true;
